@@ -1,0 +1,70 @@
+# Make rails (- puma -) + nginx + mysql 8.0 environment on Mac
+# References　https://github.com/priscilasanfer/nginx_postgress_puma_rails/
+#
+# Step 1 Make rails project[Remove container after run]
+# docker-compose run --rm app rails new . --force --database=mysql --skip-bundle
+# 
+# Step 2 Change database setting
+# vi rails_app/config/database.yml (host: 'db', password: 'password')
+# 
+# Step 3 Build an image from a Dockerfile
+# docker-compose build --no-cache
+#
+# Step 4 DB migration for rails project
+# docker-compose run --rm  app rails db:create
+#
+# Step 5 Make containers and start
+# docker-compose up -d
+# Access to http://localhost and check if "Yay! You’re on Rails!" phrase appears
+#
+# Access database by command
+# 1:check docker container name of database
+# cmd: docker-compose ps
+# 2:access by terminal
+# docker exec -it rails_nginx_mysql_on_docker_for_mac_db_1 bash
+# or
+# TablePlus or other db client soft
+# Host:127.0.0.1 Port:13306
+# User:root Password:password
+
+
+version: '3'
+services:
+  # MySQLコンテナ定義
+  db:
+    # mysqlを使用してコンテナ作成
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    # localの「 ./db_data」にmysql関連データ保存用にマウント
+    volumes:
+      - ./db_data:/var/lib/mysql
+    # コンテナ内の環境変数を定義
+    environment:
+      # mysqlのルートユーザーのパスワード設定
+      MYSQL_ROOT_PASSWORD: password
+    # mac client applicationでアクセスするため「ホストとコンテの間」のポート」を設定
+    # sudo lsof -i:13306 でポートが未使用なのを確認必要!
+    ports:
+      - 13306:3306
+  # Railsコンテナ定義
+  app:
+    build:
+      context: .
+      dockerfile: ./rails_app/Dockerfile
+    volumes:
+      - ./rails_app:/var/www/rails_app
+    environment:
+      - RAILS_ENV=development
+    depends_on:
+      - db
+  # Nginxコンテナ定義
+  web:
+    build:
+      context: .
+      dockerfile: ./nginx/Dockerfile
+    volumes:
+      - ./log:/var/log/nginx
+    ports:
+      - 80:80
+    depends_on:
+      - app
